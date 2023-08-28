@@ -1,5 +1,5 @@
 ---
-- name: install RKE2 prerequisites
+- name: Install RKE2 prerequisites
   apt:
     name:
       - iptables
@@ -8,133 +8,148 @@
     state: latest
     cache_valid_time: 86400
   tags:
-    - rke2_packages
+    - rke2
+    - rke2_install
+    - rke2_install_packages
     - apt_packages
 
-- name: create RKE2 config dir
+- name: Create RKE2 config dir
   file:
-    path: /etc/rancher/rke2
+    path: {{ rke2_config_dir }}
     mode: 0750
     state: directory
   tags:
-    - rke2_config_dir
+    - rke2
+    - rke2_install
+    - rke2_install_config_dir
 
-- name: create dir for various downloaded files
+- name: Create dir for various downloaded files
   file:
-    path: /root/install
+    path: {{ downlad_directory }}
     state: directory
   tags:
-    - rke2_root_install_dir
+    - rke2
+    - rke2_install
+    - rke2_install_root_install_dir
 
-- name: configure RKE2 tls-san
+- name: Configure RKE2 tls-san
   ansible.builtin.template:
     src: "config.j2"
-    dest: "/etc/rancher/rke2/config.yaml"
+    dest: "{{ rke2_config_file }}"
   tags:
-    - rke2_tls-san
+    - rke2
+    - rke2_install
+    - rke2_install_tls-san
 
-- name: configure PATH to kubectl for all users
+- name: Configure PATH to kubectl for all users
   ansible.builtin.copy:
     src: rke2-bash-profile
-    dest: /etc/profile.d/rke2.sh
+    dest: "{{ rke2_profile_file }}"
     owner: root
     group: root
     mode: '0755'
   tags:
-    - rke2_kubectl_path
-    - rke2_kubectl_path_bashrc
+    - rke2
+    - rke2_install
+    - rke2_install_kubectl_path
 
 # check_mode return changed in check mode, it was fixed in
 # Ansible 2.13.0, https://github.com/ansible/ansible/issues/65687
-- name: download rke2 installer
+- name: Download rke2 installer
   ansible.builtin.get_url:
-    url: https://get.rke2.io
-    dest: /usr/local/bin/rke2-install.sh
+    url: "{{ rke2_installer_url }}"
+    dest: "{{ rke2_installer_file }}"
     mode: '0755'
     backup: true
   tags:
-    - rke2_download
+    - rke2
+    - rke2_install
+    - rke2_install_download
 
 # versions of rke2 are listed here:
 #    https://github.com/ansible/ansible/issues/65687
 # but we are OK with any present
-- name: exec rke2 installer
+- name: Exec rke2 installer
   ansible.builtin.shell:
-    cmd: /usr/local/bin/rke2-install.sh
-    creates: /usr/local/bin/rke2
+    environment:
+      INSTALL_RKE2_TYPE: ansible_facts['rke2_cluster_role']
+    cmd: "{{ rke2_installer_file }}"
+    creates: "{{ rke2_binary_file }}"
   tags:
+    - rke2
     - rke2_install
+    - rke2_install_install
 
-- name: enable & start rke service
+- name: Enable & start rke service
   ansible.builtin.systemd:
     name: rke2-server.service
     enabled: yes
     masked: no
     state: started
   tags:
-    - rke2_enable_and_start
+    - rke2
+    - rke2_install
+    - rke2_install_enable_and_start
 
-- name: fix permisons on /etc/rancher/rke2/rke2.yaml
+- name: Fix permisons on {{ rke2_config_file }}
   ansible.builtin.file:
-    path: /etc/rancher/rke2/rke2.yaml
+    path: "{{ rke2_config_file }}"
     owner: root
     group: root
     mode: 0600
   tags:
-    - kube_config
+    - rke2
+    - rke2_install
+    - rke2_install_config_permissions
 
-- name: create var with paths
-  set_fact:
-    kube_cfg_dir: "{{ rke2_default_kube_cfg_dir + custom_kube_cfg_dir | default([]) }}"
-  tags:
-    - kube_config
-
-# this and later command is needed to kubectl start working
-- name: create kube config dir
-  ansible.builtin.file:
-    path: "{{ item.dir }}"
-    owner: "{{ item.owner }}"
-    group: "{{ item.group }}"
-    mode: 0750
-    state: directory
-  with_items: "{{ kube_cfg_dir }}"
-  tags:
-    - kube_config
-    - kube_config_dir
-
-- name: copy kube config
-  ansible.builtin.copy:
-    src: /etc/rancher/rke2/rke2.yaml
-    remote_src: true
-    dest: "{{ item.dir }}/config"
-    owner: "{{ item.owner }}"
-    group: "{{ item.group }}"
-    mode: 0400
-  with_items: "{{ kube_cfg_dir }}"
-  tags:
-    - kube_config
-
-- name: update network policy
+- name: Update network policy
   kubernetes.core.k8s:
     namespace: default
     state: present
     definition: "{{ lookup('file', 'networkpolicy.yaml') | from_yaml }}"
   tags:
-    - rke2_network-policy
+    - rke2
+    - rke2_install
+    - rke2_install_network-policy
 
-- name: wait to start of instalation of rke2
+- name: Get members of syadmin group
+  set_fact:
+    kubernetes_admins: "{{ item.members }}"
+  with_items: "{{ user_roles | selectattr('name','equalto','sysadmin') }}"
+  tags:
+    - rke2
+    - rke2_install
+    - rke2_install_kube_config
+    - rke2_install_kube_config_get_users
+
+- name: Set kube config for admins
+  include_tasks: kube_config.yml
+  loop: kubernetes_admin
+  loop_control:
+    loop_var: kubernetes_admin
+  tags:
+    - rke2
+    - rke2_install
+    - rke2_install_kube_config
+    - rke2_install_kube_config_set
+
+- name: Wait to start of instalation of rke2
   include_tasks: wait2complete.yml
   vars:
     pod_name: "kube-scheduler-{{ ansible_hostname }}"
     namespace: kube-system
   tags:
-    kube-system-wait
+    - rke2
+    - rke2_install
+    - kube-system-wait
   when: not ansible_check_mode
 
-- name: wait to complete instalation of rke2
+- name: Wait to complete instalation of rke2
   include_tasks: wait2complete.yml
   vars:
     namespace: kube-system
   tags:
-    kube-system-wait
+    - rke2
+    - rke2_install
+    - kube-system-wait
   when: not ansible_check_mode

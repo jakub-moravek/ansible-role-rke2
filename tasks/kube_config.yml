@@ -1,0 +1,41 @@
+---
+- name: Check whether admin account exists
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ kubernetes_admin }}"
+    split: ':'
+  ignore_errors: true
+
+- name: Create kube config for user
+  block:
+  - name: Get admin's home
+    set_fact:
+      kubernetes_admin_home: "{{ ansible_facts.getent_passwd[{{ kubernetes_admin }}].5 }}"
+
+  - name: Create kube config dirs
+    ansible.builtin.file:
+      path: "{{ kubernetes_admin_home }}/.kube"
+      owner: "{{ kubernetes_admin }}"
+      group: "{{ kubernetes_admin }}"
+      mode: 0750
+      state: directory
+    tags:
+      - rke2
+      - rke2_install
+      - rke2_install_kube_config
+      - rke2_install_kube_config_create_dirs
+
+  - name: Copy kube config
+    ansible.builtin.copy:
+      src: "{{ rke2_config_file }}"
+      remote_src: true
+      dest: "{{ kubernetes_admin_home }}/.kube/config"
+      owner: "{{ kubernetes_admin }}"
+      group: "{{ kubernetes_admin }}"
+      mode: 0400
+    tags:
+      - rke2
+      - rke2_install
+      - rke2_install_kube_config
+      - rke2_install_kube_config_perms
+  when: ansible_facts.getent_passwd["{{kubernetes_admin}}"] is defined

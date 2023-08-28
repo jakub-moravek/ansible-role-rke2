@@ -1,8 +1,31 @@
 ---
 # vars file for rke2
-rke2_install_local_path_provisioner: true
-rke2_install_ingress_nginx: false
+
+# general
+downlad_directory: /root/install
+
+# main
+etc_default_dir: /etc/default
+
+# rke2
 rke2_default_kube_cfg_dir:
   - owner: "root"
     group: "root"
     dir: "/root/.kube"
+rke2_config_dir: /etc/rancher/rke2
+rke2_config_file: "{{ rke2_config_dir }}/config.yaml"
+rke2_profile_file: /etc/profile.d/rke2.sh
+rke2_installer_url: https://get.rke2.io
+rke2_installer_file: /usr/local/bin/rke2-install.sh
+rke2_binary_file: /usr/local/bin/rke2
+
+# cert manager
+cert_manager_manifest_url: https://github.com/cert-manager/cert-manager/releases/download/v1.12.3/cert-manager.yaml
+cert_manager_manifest_file: "{{ downlad_directory }}/cert-manager.yaml"
+
+# local_path_provisioner
+local_path_provisioner_manifest_url: https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.24/deploy/local-path-storage.yaml
+local_path_provisioner_manifest_file: "{{ downlad_directory }}/local-path-storage.yaml"
+
+# wait2complete
+kubectl_file: /var/lib/rancher/rke2/bin/kubectl

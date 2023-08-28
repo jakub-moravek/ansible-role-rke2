@@ -1,5 +1,5 @@
 ---
-- name: check system resources
+- name: Check system resources
   ansible.builtin.assert:
     that:
       - ansible_processor_vcpus >= 2
@@ -10,40 +10,50 @@
     msg: RKE2 (kubernetes) needs at last two CPU and 4GB RAM
   tags:
     - rke2
-    - resources_assertion
+    - rke2_resources_assertion
 
 # https://docs.rke2.io/advanced
-- name: create /etc/default/rke2-server|agent
+- name: Create "{{ etc_default_dir }}"/rke2-agent
   template:
     src: "rke2-server-agent.j2"
-    dest: "/etc/default/{{ item }}"
+    dest: "{{ etc_default_dir }}/rke2-agent"
     owner: root
     group: root
     mode: '0644'
-  with_items:
-    - rke2-server
-    - rke2-agent
-  tags:
-    - rke2
-    - http_proxy
   when:
     proxy is defined
+  tags:
+    - rke2
+    - rke2_http_proxy
 
-- name: install rke2
+# https://docs.rke2.io/advanced
+- name: Create "{{ etc_default_dir }}"/rke2-server
+  template:
+    src: "rke2-server-agent.j2"
+    dest: "{{ etc_default_dir }}/rke2-server"
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - rke2
+    - rke2_http_proxy
+  when:
+    proxy is defined and ansible_facts['rke2_cluster_role'] == "server"
+
+- name: Install rke2
   include_tasks: rke2.yml
-  tags: rke2
-
-- name: install ingress-nginx
-  include_tasks: ingress-nginx.yml
-  when: rke2_install_ingress_nginx
-  tags: ingress-nginx
+  tags:
+    - rke2
+    - rke2_install
 
 - name: install local-path-provisioner
   include_tasks: local-path-provisioner.yml
-  when: rke2_install_local_path_provisioner
-  tags: local-path-provisioner
+  tags:
+      - rke2
+      - rke2_local-path-provisioner
 
-- name: install cert-manager
+- name: Install cert-manager
   include_tasks: cert-manager.yml
-  tags: cert-manager
-
+  tags:
+    - rke2
+    - rke2_cert-manager

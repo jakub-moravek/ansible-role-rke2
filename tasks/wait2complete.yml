@@ -1,7 +1,7 @@
 ---
-- name: "wait untill {{ pod_name }} in {{ namespace }} is Running (max 10min, delay=5s)"
+- name: "Wait untill {{ pod_name }} in {{ namespace }} is Running (max 10min, delay=5s)"
   shell:
-    cmd: "test `/var/lib/rancher/rke2/bin/kubectl -n {{ namespace }} get pod  |grep {{ pod_name }} | grep Running | wc -l` -ge 1"
+    cmd: "test `{{ kubectl_file }} -n {{ namespace }} get pod  |grep {{ pod_name }} | grep Running | wc -l` -ge 1"
   register: prq
   until: prq.rc == 0
   retries: 120 # 10*60/5
@@ -9,9 +9,9 @@
   changed_when: false
   when: pod_name is defined
 
-- name: "wait untill all pods in namespace {{ namespace }} are Running (max 10min, delay=5s)"
+- name: "Wait untill all pods in namespace {{ namespace }} are Running (max 10min, delay=5s)"
   shell:
-    cmd: "/var/lib/rancher/rke2/bin/kubectl -n {{ namespace }} get pod -o json |jq '.items[].status.phase' | grep -v Succeeded | sort -u"
+    cmd: "{{ kubectl_file }} -n {{ namespace }} get pod -o json |jq '.items[].status.phase' | grep -v Succeeded | sort -u"
   register: prq
   until: prq.stdout == '"Running"'
   retries: 120
